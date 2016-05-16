@@ -1,0 +1,166 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Load data
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+* * *
+
+## Part 1: Data
+
+### Generalizability
+
+The BRFSS study is a retrospective observationnal study.<br>
+Random sampling is used to select adults in interviews (through random selction among a household or through random dialing), but only those who possess a landline phone or a cellular phone, and living in a private residence (household) or living in college housing. **So the results will be generalizable to all American adults living in a private residence or in college, and having a landline and/or a cellular phone.**<br>
+In addition to this, modules about younger people (17yo or less) are optionnal, so not generalizable to the entire US population of 17yo and less.
+
+### Causality
+
+This is a study and not an experiment.<br>
+So random assignment is not used, are people are asked about their personnal habits. **So the results will lead to correlation between variables but not to causality.**
+
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:**<br>
+- Is there a relationship between genre and general health level?<br>
+This is an interesting question, as it shows if genre (sex) as a correlation with overall feeling about one's health.
+
+**Research quesion 2:**<br>
+- Is there a relathionship between the smoking frequency and the fact to have been diagnosed a heart attack in the past among men?<br>
+This is a useful question, as it is known that heart attacks are common among men, and it is commonly said that smoking is one factor that lead to heart attacks.
+
+**Research quesion 3:**<br>
+- Is there a relationship between the number of children in the household and the number of days full of energy among women that do not work (out of work or unable to work)?<br>
+This is an interesting question to see if "stay-at-home" women are tired because of their children. And it's funny!
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+
+**Research quesion 1:**
+
+First, I would like to create a new data frame which summarizes the sex var (genre of the person) and the genhlth var (general health), without any missing variable (NA). Let's call it health_genre.
+
+```{r}
+health_genre <- data_frame(sex = brfss2013$sex, health = brfss2013$genhlth)
+health_genre <- na.omit(health_genre)
+summary(health_genre)
+```
+
+As you see here, we get a dataset of 489 788 respondents, with 40.9% of Males and 59.1% of Females. Also, we get this distribution for health: <br>
+- 17.5% of Excellent<br>
+- 32.5% of Very good<br>
+- 30.7% of Good<br>
+- 13.6% of Fair<br>
+- 5.7% of Poor<br>
+This gives this bar plot (we use bar plot as the two variables are categorical):
+
+```{r}
+ggplot(data = health_genre, aes(x = health)) + geom_bar() + ggtitle('Distribution of health levels among whole population') + xlab('Health')
+```
+
+As you can see with filling with sex, it seems that the distribution of health level accross genres is different:
+
+```{r}
+ggplot(data = health_genre, aes(x = health, fill = sex)) + geom_bar() + ggtitle('Distribution of health levels among whole population by genre') + xlab('Health')
+```
+
+This is even clearer when computing the table:
+
+```{r}
+table(health_genre$sex, health_genre$health)
+```
+
+To see if the difference is significant, we could compute the simulation of men's and women's health level when using the base probabilities (mentionned earlier) of being a man or a woman, and the probabilities of health levels. We can create vectors to simulate sex and health for 489788 respondents and add them to the health_genre data frame. The last line is useful to set the order of the simulated health variable in the good order.
+
+```{r}
+sex_sim <- sample(c('Male', 'Female'), size = 489788, replace = TRUE, prob = c(0.409, 0.591))
+health_sim <- sample(c('Excellent', 'Very good', 'Good', 'Fair', 'Poor'), size = 489788, replace = TRUE, prob = c(0.175, 0.325, 0.307, 0.136, 0.057))
+health_genre['sex_sim'] <- sex_sim
+health_genre['health_sim'] <- health_sim
+health_genre$health_sim <- factor(health_genre$health_sim, levels = c('Excellent', 'Very good', 'Good', 'Fair', 'Poor'))
+```
+
+As you can see with the following bar plot, it seems by simulating that the distribution of health levels stays the same accros both sex, which seems normal as sex outcomes are independant. It is also confirmed by the table of the two new variables, which shows us that the frequency of health levels globally and among genres is (almost) the same.
+
+```{r}
+ggplot(data = health_genre, aes(x = health_sim, fill = sex_sim)) + geom_bar() + ggtitle('Distribution of health levels among whole simulated population by genre') + xlab('Simulated health')
+table(health_genre$sex_sim, health_genre$health_sim)
+```
+
+This concludes our first answer, finally proving us that genre and health levels are correlated.
+
+
+**Research quesion 2:**
+
+First, let's create a new data frame with the sex (genre of respondents), smokday2 (frequency of smoking) and cvdinfr4 (if diagnosed a heart attack in the past) variables. Let's call it heart_smoking. Then create a second data frame with only mens.
+
+```{r}
+heart_smoking <- data_frame(heart_attack = brfss2013$cvdinfr4, smoking_freq = brfss2013$smokday2, sex = brfss2013$sex)
+heart_smoking <- na.omit(heart_smoking)
+heart_smoking_men <- subset(heart_smoking, heart_smoking$sex == 'Male')
+summary(heart_smoking_men)
+```
+
+As you can see, we end up with 100 174 respondents. We can also make the bar plot to see if smoking frequency and heart attack seem correlated, and the differents tables to compute distribution frequencies (the two variables are still categorical in this case):
+
+```{r}
+ggplot(heart_smoking_men, aes(x = smoking_freq, fill = heart_attack)) + geom_bar() + ggtitle('Smoking frequency among men, if heart attack') + xlab('Smoking frequency per week')
+table(heart_smoking_men$heart_attack)
+table(heart_smoking_men$smoking_freq)
+table(heart_smoking_men$heart_attack, heart_smoking_men$smoking_freq)
+```
+
+Whe end up with 11.2% of men having known a heart attack (88.8% didn't), and 24.9% smoking every day, 9.6% some days, and 65.6% not at all (percentages may not add up to 100% due to rounding).<br>
+But when checking heart attack distribution against all types of smoking frequencies, we see that the distribution is near the same as the overall one, and as we saw in the last answer, when simulating, we should retrieve almost the same distribution among all levels of smoking. This led us to say that we can't conclude that smoking frequencies and heart attacks are correlated among men.
+
+
+**Research quesion 3:**
+
+First, as usual now, we can create a new data frame containing the variable about genre (sex), the number of children in the household (children), the number of days of full energy (qlhlth2), and also their employement status (employ1). Then, we create another data frame with only women, who do not work.
+
+```{r}
+energy_children <- data_frame(energy_days = brfss2013$qlhlth2, children_nb = brfss2013$children, sex = brfss2013$sex, job = brfss2013$employ1)
+energy_children_women_no_work = subset(energy_children, energy_children$sex == 'Female'& (energy_children$job == 'A homemaker' | energy_children$job == 'Unable to work' | energy_children$job == 'Retired' | energy_children$job == 'Out of work for less than 1 year' | energy_children$job == 'Out of work for 1 year or more'))
+summary(energy_children_women_no_work)
+```
+
+We can see that we hardly have enough data per level of number of children, so we can't answer to the original question. Nonetheless, we can compute a new variable which will include if a women as children or not, and then answer to the question not according to the number of children, but according to if a women as children or not.
+
+```{r}
+energy_children_women_no_work$have_child = ifelse(energy_children_women_no_work$children_nb == 0, 'NO', 'YES')
+energy_children_women_no_work <- na.omit(energy_children_women_no_work)
+summary(energy_children_women_no_work)
+```
+
+Finally, we can draw a boxplot from this variable and the number of full energy days, to see the distribution of energy days if a women as children or not.
+
+```{r}
+ggplot(energy_children_women_no_work, aes(x = have_child, y = energy_days)) + geom_boxplot() + ggtitle('Distribution of number of energy days among women who have children or not') + xlab('Have children or not') + ylab('Number of full energy days')
+```
+
+We can see that the median is much higher among women who do not have children at home, and the interquartile range also. This gives a correlation between having children or not and the number of full energy days among women who do not work.
